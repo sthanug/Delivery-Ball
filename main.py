@@ -1,4 +1,3 @@
-# Tile viewer: shows every tile with its number. Hover to see it big.
 import pygame
 from pathlib import Path
 
