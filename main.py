@@ -427,6 +427,7 @@ def car_rect(car):
 
 def update_cars(dt):
     global cars, ball_vx, ball_vy, boost_timer, hit_cooldown
+    global score, score_popup, score_popup_timer
 
     for i in range(len(CAR_ROADS)):
         row, direction = CAR_ROADS[i]
@@ -464,6 +465,9 @@ def update_cars(dt):
             ball_vy = away_y / length * new_speed
             boost_timer = BOOST_TIME
             hit_cooldown = HIT_COOLDOWN
+            score = max(score - 10, 0)
+            score_popup = "10 LOST"
+            score_popup_timer = 1.2
             car_sound.play()
             break
 
