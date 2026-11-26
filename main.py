@@ -342,14 +342,19 @@ has_package = False
 deliveries = 0
 score = 0
 delivery_streak = 0
-score_popup = ""
-score_popup_timer = 0
+notifications = []
+NOTIFICATION_DURATION = 1.5
+
+def add_notification(text):
+    notifications.append({
+        "text": text,
+        "timer": NOTIFICATION_DURATION
+    })
 
 
 def update_people():
     global sender, sender_look, receiver, receiver_look
     global has_package, deliveries, score, delivery_streak
-    global score_popup, score_popup_timer
 
     if not has_package:
         if ball_rect().colliderect(sender):
@@ -364,14 +369,10 @@ def update_people():
             delivery_streak += 1
 
             streak_bonus = min((delivery_streak - 1) * 25, 100)
-            score += 100 + streak_bonus
+            delivery_reward = 100 + streak_bonus
+            score += delivery_reward
 
-            if streak_bonus > 0:
-                score_popup = f"BONUS {streak_bonus}"
-            else:
-                score_popup = "100 DELIVERY"
-
-            score_popup_timer = 1.2
+            add_notification(f"DELIVERY! GET {delivery_reward}")
             deliver_sound.play()
             sender = random_spot(receiver)
             sender_look = random.choice(PERSON_TILES)
@@ -440,7 +441,7 @@ def car_rect(car):
 
 def update_cars(dt):
     global cars, ball_vx, ball_vy, boost_timer, hit_cooldown
-    global score, score_popup, score_popup_timer, delivery_streak
+    global score, delivery_streak
 
     for i in range(len(CAR_ROADS)):
         row, direction = CAR_ROADS[i]
@@ -470,9 +471,9 @@ def update_cars(dt):
         rect = car_rect(car)
         near_miss_rect = rect.inflate(100, 100)
 
-        # Normal collision
+        # If we hit the car, this takes priority
         if ball_rect().colliderect(rect):
-            # A collision always cancels this car's near-miss progress.
+            # Hitting it cancels any near-miss progress
             car["near_miss_timer"] = 0
 
             if hit_cooldown <= 0:
@@ -488,13 +489,12 @@ def update_cars(dt):
                 hit_cooldown = HIT_COOLDOWN
                 score = max(score - 10, 0)
                 delivery_streak = 0
-                score_popup = "10 LOST"
-                score_popup_timer = 1.2
+                add_notification("CAR! LOSE 10")
                 car_sound.play()
 
             continue
 
-        # Speed-based near miss
+        # Only count a near-miss if we're moving fast enough
         if (
             ball_speed >= MIN_NEAR_MISS_SPEED
             and ball_rect().colliderect(near_miss_rect)
@@ -505,8 +505,7 @@ def update_cars(dt):
             if car["near_miss_timer"] >= NEAR_MISS_DURATION:
                 score += 25
                 car["near_miss_awarded"] = True
-                score_popup = "25 NEAR MISS"
-                score_popup_timer = 1.2
+                add_notification("NEAR MISS! GET 25")
         else:
             car["near_miss_timer"] = 0
 
@@ -543,11 +542,17 @@ def draw_hud():
     text = hud_font.render(f"TIME  {seconds:.0f}", True, color)
     screen.blit(text, text.get_rect(midright=(panel.right - 18, panel.centery)))
 
-    if delivery_streak > 0:
-        draw_text(f"STREAK {delivery_streak}", hud_font, (WIDTH // 2, panel.bottom + 25))
+    # Popups stack
+    popup_y = panel.bottom + 35
 
-    if score_popup_timer > 0:
-        draw_text(score_popup, hud_font, (WIDTH // 2, panel.bottom + 95))
+    if delivery_streak > 0:
+        draw_text(f"STREAK! {delivery_streak}", hud_font, (WIDTH // 2, popup_y))
+        popup_y += 42
+
+    for notification in notifications:
+        draw_text(notification["text"], hud_font, (WIDTH // 2, popup_y))
+        popup_y += 42
+
 
 def draw_text(text, font, center):
     shadow = font.render(text, True, (20, 20, 30))
@@ -577,7 +582,7 @@ def draw_game_over():
 def reset_game():
     global ball_x, ball_y, ball_vx, ball_vy
     global sender, sender_look, receiver, has_package, deliveries
-    global score, score_popup, score_popup_timer, delivery_streak
+    global score, delivery_streak
     global time_left, game_over, cars, car_timers, boost_timer, hit_cooldown
     ball_x = START_X
     ball_y = START_Y
@@ -590,8 +595,7 @@ def reset_game():
     deliveries = 0
     score = 0
     delivery_streak = 0
-    score_popup = ""
-    score_popup_timer = 0
+    notifications.clear()
     time_left = ROUND_TIME
     game_over = False
     cars = []
@@ -644,7 +648,7 @@ def draw_debug():
 
 
 async def main():
-    global show_debug, started, game_over, time_left, score_popup_timer
+    global show_debug, started, game_over, time_left
 
     running = True
     while running:
@@ -674,7 +678,13 @@ async def main():
             move_ball(dt)
             update_people()
             update_cars(dt)
-            score_popup_timer = max(score_popup_timer - dt, 0)
+            for notification in notifications:
+                notification["timer"] -= dt
+
+            notifications[:] = [
+                notification for notification in notifications
+                if notification["timer"] > 0
+            ]
             time_left -= dt
 
             if time_left <= 0:
