@@ -341,13 +341,14 @@ receiver_look = None
 has_package = False
 deliveries = 0
 score = 0
+delivery_streak = 0
 score_popup = ""
 score_popup_timer = 0
 
 
 def update_people():
     global sender, sender_look, receiver, receiver_look
-    global has_package, deliveries, score
+    global has_package, deliveries, score, delivery_streak
     global score_popup, score_popup_timer
 
     if not has_package:
@@ -360,8 +361,16 @@ def update_people():
         if ball_rect().colliderect(receiver):
             has_package = False
             deliveries += 1
-            score += 100
-            score_popup = "100 DELIVERY"
+            delivery_streak += 1
+
+            streak_bonus = min((delivery_streak - 1) * 25, 100)
+            score += 100 + streak_bonus
+
+            if streak_bonus > 0:
+                score_popup = f"BONUS {streak_bonus}"
+            else:
+                score_popup = "100 DELIVERY"
+
             score_popup_timer = 1.2
             deliver_sound.play()
             sender = random_spot(receiver)
@@ -427,7 +436,7 @@ def car_rect(car):
 
 def update_cars(dt):
     global cars, ball_vx, ball_vy, boost_timer, hit_cooldown
-    global score, score_popup, score_popup_timer
+    global score, score_popup, score_popup_timer, delivery_streak
 
     for i in range(len(CAR_ROADS)):
         row, direction = CAR_ROADS[i]
@@ -466,6 +475,7 @@ def update_cars(dt):
             boost_timer = BOOST_TIME
             hit_cooldown = HIT_COOLDOWN
             score = max(score - 10, 0)
+            delivery_streak = 0
             score_popup = "10 LOST"
             score_popup_timer = 1.2
             car_sound.play()
@@ -503,11 +513,14 @@ def draw_hud():
     text = hud_font.render(f"TIME  {seconds:.0f}", True, color)
     screen.blit(text, text.get_rect(midright=(panel.right - 18, panel.centery)))
 
+    if delivery_streak > 0:
+        draw_text(f"STREAK {delivery_streak}", hud_font, (WIDTH // 2, panel.bottom + 25))
+
     if boost_timer > 0:
-        draw_text("SPEED X2", hud_font, (WIDTH // 2, panel.bottom + 26))
+        draw_text("SPEED X2", hud_font, (WIDTH // 2, panel.bottom + 60))
 
     if score_popup_timer > 0:
-        draw_text(score_popup, hud_font, (WIDTH // 2, panel.bottom + 65))
+        draw_text(score_popup, hud_font, (WIDTH // 2, panel.bottom + 95))
 
 def draw_text(text, font, center):
     shadow = font.render(text, True, (20, 20, 30))
@@ -537,7 +550,7 @@ def draw_game_over():
 def reset_game():
     global ball_x, ball_y, ball_vx, ball_vy
     global sender, sender_look, receiver, has_package, deliveries
-    global score, score_popup, score_popup_timer
+    global score, score_popup, score_popup_timer, delivery_streak
     global time_left, game_over, cars, car_timers, boost_timer, hit_cooldown
     ball_x = START_X
     ball_y = START_Y
@@ -549,6 +562,7 @@ def reset_game():
     has_package = False
     deliveries = 0
     score = 0
+    delivery_streak = 0
     score_popup = ""
     score_popup_timer = 0
     time_left = ROUND_TIME
