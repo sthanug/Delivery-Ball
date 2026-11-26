@@ -392,6 +392,7 @@ def draw_people():
 
 CAR_MIN_SPEED = 180
 CAR_MAX_SPEED = 280
+MIN_NEAR_MISS_SPEED = 300
 CAR_WAIT_MIN = 1.0
 CAR_WAIT_MAX = 4.0
 BOOST_TIME = 2.0
@@ -422,6 +423,7 @@ def spawn_car(row, direction):
         "direction": direction,
         "speed": random.randint(CAR_MIN_SPEED, CAR_MAX_SPEED),
         "image": make_car_image(random.choice(CAR_DESIGNS), direction == 1),
+        "near_miss_awarded": False,
     }
 
 
@@ -460,16 +462,58 @@ def update_cars(dt):
     boost_timer = max(boost_timer - dt, 0)
     hit_cooldown = max(hit_cooldown - dt, 0)
 
-    if hit_cooldown > 0:
-        return
+    ball_speed = (ball_vx ** 2 + ball_vy ** 2) ** 0.5
+
     for car in cars:
         rect = car_rect(car)
+        near_miss_rect = rect.inflate(100, 100)
+
+        # Normal collision
         if ball_rect().colliderect(rect):
+            if hit_cooldown <= 0:
+                away_x = ball_x - rect.centerx
+                away_y = ball_y - rect.centery
+                length = (away_x ** 2 + away_y ** 2) ** 0.5 or 1
+                speed = (ball_vx ** 2 + ball_vy ** 2) ** 0.5
+                new_speed = min(max(speed, 300) * 2, MAX_SPEED * 2)
+
+                ball_vx = away_x / length * new_speed
+                ball_vy = away_y / length * new_speed
+                boost_timer = BOOST_TIME
+                hit_cooldown = HIT_COOLDOWN
+                score = max(score - 10, 0)
+                delivery_streak = 0
+                score_popup = "10 LOST"
+                score_popup_timer = 1.2
+                car_sound.play()
+
+            continue
+
+        # Speed-based near miss
+        if (
+            ball_speed >= MIN_NEAR_MISS_SPEED
+            and ball_rect().colliderect(near_miss_rect)
+            and not car.get("near_miss_awarded", False)
+        ):
+            score += 25
+            car["near_miss_awarded"] = True
+            score_popup = "25 NEAR MISS"
+            score_popup_timer = 1.2
+
+ball_speed = (ball_vx ** 2 + ball_vy ** 2) ** 0.5
+
+for car in cars:
+    rect = car_rect(car)
+    near_miss_rect = rect.inflate(100, 100)
+
+    if ball_rect().colliderect(rect):
+        if hit_cooldown <= 0:
             away_x = ball_x - rect.centerx
             away_y = ball_y - rect.centery
             length = (away_x ** 2 + away_y ** 2) ** 0.5 or 1
             speed = (ball_vx ** 2 + ball_vy ** 2) ** 0.5
             new_speed = min(max(speed, 300) * 2, MAX_SPEED * 2)
+
             ball_vx = away_x / length * new_speed
             ball_vy = away_y / length * new_speed
             boost_timer = BOOST_TIME
@@ -479,7 +523,20 @@ def update_cars(dt):
             score_popup = "10 LOST"
             score_popup_timer = 1.2
             car_sound.play()
-            break
+
+        continue
+
+if (
+    ball_speed >= MIN_NEAR_MISS_SPEED
+    and ball_rect().colliderect(near_miss_rect)
+    and not car.get("near_miss_awarded", False)
+):
+        score += 25
+        car["near_miss_awarded"] = True
+        score_popup = "25 NEAR MISS"
+        score_popup_timer = 1.2
+
+
 
 
 def draw_cars():
