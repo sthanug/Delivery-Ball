@@ -340,10 +340,16 @@ receiver = None
 receiver_look = None
 has_package = False
 deliveries = 0
+score = 0
+score_popup = ""
+score_popup_timer = 0
 
 
 def update_people():
-    global sender, sender_look, receiver, receiver_look, has_package, deliveries
+    global sender, sender_look, receiver, receiver_look
+    global has_package, deliveries, score
+    global score_popup, score_popup_timer
+
     if not has_package:
         if ball_rect().colliderect(sender):
             has_package = True
@@ -354,6 +360,9 @@ def update_people():
         if ball_rect().colliderect(receiver):
             has_package = False
             deliveries += 1
+            score += 100
+            score_popup = "100 DELIVERY"
+            score_popup_timer = 1.2
             deliver_sound.play()
             sender = random_spot(receiver)
             sender_look = random.choice(PERSON_TILES)
@@ -482,10 +491,8 @@ def draw_hud():
     screen.blit(background, panel)
     pygame.draw.rect(screen, (255, 170, 60), panel, 3, border_radius=14)
 
-    icon_rect = package_image.get_rect(midleft=(panel.left + 18, panel.centery))
-    screen.blit(package_image, icon_rect)
-    text = hud_font.render(f"DELIVERED  {deliveries}", True, (255, 255, 255))
-    screen.blit(text, text.get_rect(midleft=(icon_rect.right + 12, panel.centery)))
+    text = hud_font.render(f"SCORE  {score}", True, (255, 255, 255))
+    screen.blit(text, text.get_rect(midleft=(panel.left + 22, panel.centery)))
 
     seconds = max(time_left, 0)
     color = (255, 80, 80) if seconds <= 10 else (255, 255, 255)
@@ -495,6 +502,8 @@ def draw_hud():
     if boost_timer > 0:
         draw_text("SPEED X2", hud_font, (WIDTH // 2, panel.bottom + 26))
 
+    if score_popup_timer > 0:
+        draw_text(score_popup, hud_font, (WIDTH // 2, panel.bottom + 65))
 
 def draw_text(text, font, center):
     shadow = font.render(text, True, (20, 20, 30))
@@ -510,7 +519,8 @@ def draw_game_over():
     screen.blit(shade, (0, 0))
 
     draw_text("TIMES UP", big_font, (WIDTH // 2, HEIGHT // 2 - 90))
-    draw_text(f"YOU DELIVERED  {deliveries}  PACKAGES", hud_font, (WIDTH // 2, HEIGHT // 2))
+    draw_text(f"FINAL SCORE  {score}", hud_font, (WIDTH // 2, HEIGHT // 2))
+    draw_text(f"DELIVERIES  {deliveries}", hud_font, (WIDTH // 2, HEIGHT // 2 + 45))
 
     mouse_over = PLAY_AGAIN_BUTTON.collidepoint(pygame.mouse.get_pos())
     color = (255, 170, 60) if mouse_over else (230, 120, 40)
@@ -523,6 +533,7 @@ def draw_game_over():
 def reset_game():
     global ball_x, ball_y, ball_vx, ball_vy
     global sender, sender_look, receiver, has_package, deliveries
+    global score, score_popup, score_popup_timer
     global time_left, game_over, cars, car_timers, boost_timer, hit_cooldown
     ball_x = START_X
     ball_y = START_Y
@@ -533,6 +544,9 @@ def reset_game():
     receiver = None
     has_package = False
     deliveries = 0
+    score = 0
+    score_popup = ""
+    score_popup_timer = 0
     time_left = ROUND_TIME
     game_over = False
     cars = []
@@ -585,7 +599,7 @@ def draw_debug():
 
 
 async def main():
-    global show_debug, started, game_over, time_left
+    global show_debug, started, game_over, time_left, score_popup_timer
 
     running = True
     while running:
@@ -615,8 +629,11 @@ async def main():
             move_ball(dt)
             update_people()
             update_cars(dt)
+            score_popup_timer = max(score_popup_timer - dt, 0)
             time_left -= dt
+
             if time_left <= 0:
+                time_left = 0
                 game_over = True
 
         screen.blit(city_surface, (0, 0))
