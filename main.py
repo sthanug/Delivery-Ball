@@ -344,12 +344,60 @@ score = 0
 delivery_streak = 0
 notifications = []
 NOTIFICATION_DURATION = 1.5
+particles = []
+
+def spawn_delivery_particles(x, y, colors=None, count=18, speed_range=(80, 250)):
+    if colors is None:
+        colors = [
+            (255, 220, 60),
+            (255, 160, 40),
+            (255, 255, 255)
+        ]
+
+    for _ in range(count):
+        angle = random.uniform(0, 6.28)
+        speed = random.uniform(*speed_range)
+        direction = pygame.math.Vector2(1, 0).rotate_rad(angle)
+
+        particles.append({
+            "x": x,
+            "y": y,
+            "vx": direction.x * speed,
+            "vy": direction.y * speed,
+            "timer": 0.5,
+            "size": random.randint(3, 6),
+            "color": random.choice(colors)
+        })
 
 def add_notification(text):
     notifications.append({
         "text": text,
         "timer": NOTIFICATION_DURATION
     })
+
+def draw_particles():
+    for particle in particles:
+        pygame.draw.circle(
+            screen,
+            particle["color"],
+            (int(particle["x"]), int(particle["y"])),
+            particle["size"]
+        )
+
+
+def update_particles(dt):
+    for particle in particles:
+        particle["x"] += particle["vx"] * dt
+        particle["y"] += particle["vy"] * dt
+        particle["timer"] -= dt
+
+        particle["vx"] *= 0.96
+        particle["vy"] *= 0.96
+
+    particles[:] = [
+        particle for particle in particles
+        if particle["timer"] > 0
+    ]
 
 
 def update_people():
@@ -371,6 +419,7 @@ def update_people():
             streak_bonus = min((delivery_streak - 1) * 25, 100)
             delivery_reward = 100 + streak_bonus
             score += delivery_reward
+            spawn_delivery_particles(ball_x, ball_y)
 
             add_notification(f"DELIVERY! GET {delivery_reward}")
             deliver_sound.play()
@@ -399,6 +448,11 @@ CAR_WAIT_MAX = 4.0
 BOOST_TIME = 2.0
 HIT_COOLDOWN = 0.6
 NEAR_MISS_DURATION = 0.25
+SHAKE_DURATION = 0.12
+SHAKE_AMOUNT = 4
+shake_timer = 0
+
+
 
 
 def make_car_image(design, going_right):
@@ -427,6 +481,7 @@ def spawn_car(row, direction):
         "image": make_car_image(random.choice(CAR_DESIGNS), direction == 1),
         "near_miss_awarded": False,
         "near_miss_timer": 0,
+        "hit_player": False,
     }
 
 
@@ -441,7 +496,7 @@ def car_rect(car):
 
 def update_cars(dt):
     global cars, ball_vx, ball_vy, boost_timer, hit_cooldown
-    global score, delivery_streak
+    global score, delivery_streak, shake_timer
 
     for i in range(len(CAR_ROADS)):
         row, direction = CAR_ROADS[i]
@@ -487,10 +542,22 @@ def update_cars(dt):
                 ball_vy = away_y / length * new_speed
                 boost_timer = BOOST_TIME
                 hit_cooldown = HIT_COOLDOWN
+                shake_timer = SHAKE_DURATION
                 score = max(score - 10, 0)
                 delivery_streak = 0
+                car["hit_player"] = True
                 add_notification("CAR! LOSE 10")
                 car_sound.play()
+                spawn_delivery_particles(ball_x,ball_y,
+                colors=[
+                (255, 90, 50),
+                (255, 140, 40),
+                (255, 220, 100),
+                (255, 255, 255)
+            ],
+                count=12,
+                speed_range=(150, 350)
+                )
 
             continue
 
@@ -499,6 +566,7 @@ def update_cars(dt):
             ball_speed >= MIN_NEAR_MISS_SPEED
             and ball_rect().colliderect(near_miss_rect)
             and not car["near_miss_awarded"]
+            and not car["hit_player"]
         ):
             car["near_miss_timer"] += dt
 
@@ -508,6 +576,7 @@ def update_cars(dt):
                 add_notification("NEAR MISS! GET 25")
         else:
             car["near_miss_timer"] = 0
+        
 
 
 
@@ -602,6 +671,7 @@ def reset_game():
     car_timers = [random.uniform(0.5, 2.0) for road in CAR_ROADS]
     boost_timer = 0
     hit_cooldown = 0
+    shake_timer = 0
 
 
 def draw_start_screen():
@@ -648,7 +718,7 @@ def draw_debug():
 
 
 async def main():
-    global show_debug, started, game_over, time_left
+    global show_debug, started, game_over, time_left, shake_timer
 
     running = True
     while running:
@@ -678,6 +748,7 @@ async def main():
             move_ball(dt)
             update_people()
             update_cars(dt)
+            update_particles(dt)
             for notification in notifications:
                 notification["timer"] -= dt
 
@@ -697,6 +768,7 @@ async def main():
         if has_package:
             draw_box(int(ball_x), int(ball_y) - 20)
         draw_cars()
+        draw_particles()
         draw_hud()
         if show_debug:
             draw_debug()
@@ -704,6 +776,16 @@ async def main():
             draw_game_over()
         if not started:
             draw_start_screen()
+        if shake_timer > 0:
+            frame = screen.copy()
+            screen.blit(city_surface, (0, 0))
+
+            offset_x = random.randint(-SHAKE_AMOUNT, SHAKE_AMOUNT)
+            offset_y = random.randint(-SHAKE_AMOUNT, SHAKE_AMOUNT)
+
+            screen.blit(frame, (offset_x, offset_y))
+            shake_timer = max(shake_timer - dt, 0)
+
         pygame.display.flip()
         await asyncio.sleep(0)
 
