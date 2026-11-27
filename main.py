@@ -345,8 +345,35 @@ delivery_streak = 0
 notifications = []
 NOTIFICATION_DURATION = 1.5
 particles = []
+boost_trail_timer = 0
 
-def spawn_delivery_particles(x, y, colors=None, count=18, speed_range=(80, 250)):
+def spawn_boost_trail():
+    speed = (ball_vx ** 2 + ball_vy ** 2) ** 0.5
+
+    if speed < 1:
+        return
+
+    direction = pygame.math.Vector2(ball_vx, ball_vy).normalize()
+    behind = -direction
+
+    x = ball_x + behind.x * 16
+    y = ball_y + behind.y * 16
+
+    particles.append({
+        "x": x + random.uniform(-3, 3),
+        "y": y + random.uniform(-3, 3),
+        "vx": behind.x * random.uniform(30, 100) + random.uniform(-25, 25),
+        "vy": behind.y * random.uniform(30, 100) + random.uniform(-25, 25),
+        "timer": 0.2,
+        "size": random.randint(2, 4),
+        "color": random.choice([
+            (255, 220, 60),
+            (255, 160, 40),
+            (255, 120, 30)
+        ])
+    })
+
+def spawn_delivery_particles(x, y, colors=None, count=18, speed_range=(80, 250), lifetime=0.5, size_range=(3, 6)):
     if colors is None:
         colors = [
             (255, 220, 60),
@@ -364,8 +391,8 @@ def spawn_delivery_particles(x, y, colors=None, count=18, speed_range=(80, 250))
             "y": y,
             "vx": direction.x * speed,
             "vy": direction.y * speed,
-            "timer": 0.5,
-            "size": random.randint(3, 6),
+            "timer": lifetime,
+            "size": random.randint(*size_range),
             "color": random.choice(colors)
         })
 
@@ -419,7 +446,19 @@ def update_people():
             streak_bonus = min((delivery_streak - 1) * 25, 100)
             delivery_reward = 100 + streak_bonus
             score += delivery_reward
-            spawn_delivery_particles(ball_x, ball_y)
+            spawn_delivery_particles(
+                receiver.centerx,
+                receiver.centery,
+                colors=[
+                    (255, 215, 90),
+                    (255, 240, 180),
+                    (255, 255, 255)
+                ],
+                count=8,
+                speed_range=(50, 120),
+                lifetime=0.12,
+                size_range=(1, 3)
+            )
 
             add_notification(f"DELIVERY! GET {delivery_reward}")
             deliver_sound.play()
@@ -548,7 +587,7 @@ def update_cars(dt):
                 car["hit_player"] = True
                 add_notification("CAR! LOSE 10")
                 car_sound.play()
-                spawn_delivery_particles(ball_x,ball_y,
+                spawn_delivery_particles(ball_x, ball_y,
                 colors=[
                 (255, 90, 50),
                 (255, 140, 40),
@@ -652,7 +691,7 @@ def reset_game():
     global ball_x, ball_y, ball_vx, ball_vy
     global sender, sender_look, receiver, has_package, deliveries
     global score, delivery_streak
-    global time_left, game_over, cars, car_timers, boost_timer, hit_cooldown
+    global time_left, game_over, cars, car_timers, boost_timer, hit_cooldown, boost_trail_timer
     ball_x = START_X
     ball_y = START_Y
     ball_vx = 0
@@ -672,6 +711,7 @@ def reset_game():
     boost_timer = 0
     hit_cooldown = 0
     shake_timer = 0
+    boost_trail_timer = 0
 
 
 def draw_start_screen():
@@ -718,7 +758,7 @@ def draw_debug():
 
 
 async def main():
-    global show_debug, started, game_over, time_left, shake_timer
+    global show_debug, started, game_over, time_left, shake_timer, boost_trail_timer
 
     running = True
     while running:
@@ -748,6 +788,16 @@ async def main():
             move_ball(dt)
             update_people()
             update_cars(dt)
+
+            if boost_timer > 0:
+                boost_trail_timer -= dt
+
+                if boost_trail_timer <= 0:
+                    spawn_boost_trail()
+                    boost_trail_timer = 0.035
+            else:
+                boost_trail_timer = 0
+
             update_particles(dt)
             for notification in notifications:
                 notification["timer"] -= dt
